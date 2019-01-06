@@ -1,7 +1,8 @@
 
 EGL_X11_SOURCES:=egl-x11.c
-EGL_X11_CFLAGS:=-Wall $(shell pkg-config --cflags x11 egl gl)
-EGL_X11_LDFLAGS:=$(shell pkg-config --libs x11 egl gl)
+EGL_X11_PKG_CONFIG_PACKAGES:=x11 egl gl
+EGL_X11_CFLAGS:=-Wall $(shell pkg-config --cflags $(EGL_X11_PKG_CONFIG_PACKAGES))
+EGL_X11_LDFLAGS:=$(shell pkg-config --libs $(EGL_X11_PKG_CONFIG_PACKAGES))
 EGL_X11_BINARY:=egl-x11
 
 all: $(EGL_X11_BINARY)
