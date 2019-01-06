@@ -1,0 +1,17 @@
+
+EGL_WAYLAND_SOURCES:=egl-wayland.c
+EGL_WAYLAND_PKG_CONFIG_PACKAGES:=wayland-client wayland-egl egl gl
+EGL_WAYLAND_CFLAGS:=-Wall $(shell pkg-config --cflags $(EGL_WAYLAND_PKG_CONFIG_PACKAGES))
+EGL_WAYLAND_LDFLAGS:=$(shell pkg-config --libs $(EGL_WAYLAND_PKG_CONFIG_PACKAGES))
+EGL_WAYLAND_BINARY:=egl-wayland
+
+all: $(EGL_WAYLAND_BINARY)
+
+clean:
+	rm -f *.o $(EGL_WAYLAND_BINARY)
+
+EGL_WAYLAND_OBJECTS:=$(EGL_WAYLAND_SOURCES:.c=.o)
+$(EGL_WAYLAND_OBJECTS): %.o: %.c
+	$(CC) -c $< -o $@ $(EGL_WAYLAND_CFLAGS)
+$(EGL_WAYLAND_BINARY): $(EGL_WAYLAND_OBJECTS)
+	$(CC) $^ -o $@ $(EGL_WAYLAND_LDFLAGS)
