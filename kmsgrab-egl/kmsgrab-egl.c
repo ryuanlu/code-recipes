@@ -81,12 +81,12 @@ GLuint create_vbo(GLuint position_loc, GLuint texcoord_loc)
 	GLuint vbo;
 	float vertices[] = 
 	{
-		-1.0, -1.0, 0.0, 1.0,
-		1.0, 1.0, 1.0, 0.0,
-		-1.0, 1.0, 0.0, 0.0,
-		-1.0, -1.0, 0.0, 1.0,
-		1.0, -1.0, 1.0, 1.0,
-		1.0, 1.0, 1.0, 0.0,
+		-1.0, -1.0, 0.0, 0.0,
+		1.0, 1.0, 1.0, 1.0,
+		-1.0, 1.0, 0.0, 1.0,
+		-1.0, -1.0, 0.0, 0.0,
+		1.0, -1.0, 1.0, 0.0,
+		1.0, 1.0, 1.0, 1.0,
 	};
 
 	glGenBuffers(1, &vbo);
@@ -179,12 +179,13 @@ int main(int argc, char const *argv[])
 	glViewport(0, 0, fb->width, fb->height);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_EXTERNAL_OES, texture);
-	glUniform1i(src_texture_loc, texture);
+	glUniform1i(src_texture_loc, 0);
 	glClearColor(1.0, 1.0, 1.0, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
-	glDrawArrays(GL_TRIANGLES, 0, 6);
 
 	data = calloc(fb->pitch * fb->height, 1);
+
+	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glReadPixels(0, 0, fb->width, fb->height, GL_RGBA, GL_UNSIGNED_BYTE, data);
 
 	fp = fopen("output.bin", "w");
@@ -195,8 +196,9 @@ int main(int argc, char const *argv[])
 	glDeleteFramebuffers(1, &fbo);
 	glDeleteTextures(1, &fbo_texture);
 	glDeleteBuffers(1, &vbo);
-	eglDestroyImage(egl_display, image);
+	glDeleteProgram(program);
 	glDeleteTextures(1, &texture);
+	eglDestroyImage(egl_display, image);
 	eglDestroyContext(egl_display, context);
 	eglTerminate(egl_display);
 	drmModeFreeFB(fb);
