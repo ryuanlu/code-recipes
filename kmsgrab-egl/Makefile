@@ -1,10 +1,9 @@
-
 RESOURCES:=fb.vert fb.frag
 RESOURCE_SOURCES:=$(RESOURCES:%=%.c)
 KMSGRAB_EGL_SOURCES:=kmsgrab-egl.c
 KMSGRAB_EGL_PKG_CONFIG_PACKAGES:=egl gl libdrm gbm
-KMSGRAB_EGL_CFLAGS:=-g -Wall $(shell pkg-config --cflags $(KMSGRAB_EGL_PKG_CONFIG_PACKAGES))
-KMSGRAB_EGL_LDFLAGS:=-g $(shell pkg-config --libs $(KMSGRAB_EGL_PKG_CONFIG_PACKAGES))
+KMSGRAB_EGL_CFLAGS:=-Wall $(shell pkg-config --cflags $(KMSGRAB_EGL_PKG_CONFIG_PACKAGES))
+KMSGRAB_EGL_LDFLAGS:=$(shell pkg-config --libs $(KMSGRAB_EGL_PKG_CONFIG_PACKAGES))
 KMSGRAB_EGL_BINARY:=kmsgrab-egl
 
 .SUFFIXES:
