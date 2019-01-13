@@ -1,0 +1,4 @@
+*.o
+*.bin
+*.vert.c
+*.frag.c
