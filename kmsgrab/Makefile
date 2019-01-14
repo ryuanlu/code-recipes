@@ -1,0 +1,18 @@
+KMSGRAB_SOURCES:=kmsgrab.c
+KMSGRAB_PKG_CONFIG_PACKAGES:=libdrm
+KMSGRAB_CFLAGS:=-Wall $(shell pkg-config --cflags $(KMSGRAB_PKG_CONFIG_PACKAGES))
+KMSGRAB_LDFLAGS:=-Wall $(shell pkg-config --libs $(KMSGRAB_PKG_CONFIG_PACKAGES))
+KMSGRAB_BINARY:=kmsgrab
+
+.SUFFIXES:
+
+all: $(KMSGRAB_BINARY)
+
+clean:
+	rm -f *.o $(KMSGRAB_BINARY)
+
+KMSGRAB_OBJECTS:=$(KMSGRAB_SOURCES:.c=.o)
+$(KMSGRAB_OBJECTS): %.o: %.c
+	$(CC) -c $< -o $@ $(KMSGRAB_CFLAGS)
+$(KMSGRAB_BINARY): $(KMSGRAB_OBJECTS)
+	$(CC) $^ -o $@ $(KMSGRAB_LDFLAGS)
