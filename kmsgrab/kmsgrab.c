@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <xf86drm.h>
@@ -16,12 +17,11 @@ drmModeFBPtr get_fb(const int drm_fd)
 	drmModeResPtr res;
 	drmModeCrtcPtr crtc;
 	drmModeFBPtr fb;
-	int fb_dmafd = 0;
 
 	drmSetClientCap(drm_fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
 	res = drmModeGetResources(drm_fd);
 
-	for(i = res->count_crtcs;i >= 0;--i)
+	for(i = 0;i < res->count_crtcs;--i)
 	{
 		crtc = drmModeGetCrtc(drm_fd, res->crtcs[i]);
 		if(!crtc || !crtc->buffer_id)
@@ -32,7 +32,6 @@ drmModeFBPtr get_fb(const int drm_fd)
 			break;
 	}
 
-	drmPrimeHandleToFD(drm_fd, fb->handle, O_RDONLY, &fb_dmafd);
 	drmModeFreeResources(res);
 
 	return fb;
@@ -63,26 +62,36 @@ int main(int argc, char const *argv[])
 	char* ptr = NULL;
 	char* image = NULL;
 	FILE* fp = NULL;
+	struct drm_mode_map_dumb mreq;
 
-	drm_fd = open(DRI_DEVICE_NODE, O_RDWR | FD_CLOEXEC);
+	drm_fd = open(DRI_DEVICE_NODE, O_RDWR | O_CLOEXEC);
 	fb = get_fb(drm_fd);
 
+
 	drmPrimeHandleToFD(drm_fd, fb->handle, O_RDONLY, &fb_dmafd);
-	fprintf(stderr, "drm framebuffer export dmabuf as fd %d\n", fb_dmafd);
-
 	ptr = mmap(NULL, fb->pitch * fb->height, PROT_READ, MAP_SHARED, fb_dmafd, 0);
-	fprintf(stderr, "mmap fd %d: %p\n", fb_dmafd, ptr);
-
+	fprintf(stderr, "mmap dmabuf fd %d: %p\n", fb_dmafd, ptr);
 	image = calloc(fb->pitch * fb->height, 1);
 	tiled_to_linear(ptr, image, fb->pitch, fb->height, INTEL_XTILE_WIDTH, INTEL_XTILE_HEIGHT);
-	munmap(ptr, fb->pitch * fb->height);
-
-	fp = fopen("output.bin", "w");
+	fp = fopen("output_dmabuf.bin", "w");
 	fwrite(image, fb->pitch * fb->height, 1, fp);
 	fclose(fp);
+	munmap(ptr, fb->pitch * fb->height);
 	free(image);
-
 	close(fb_dmafd);
+
+
+	memset(&mreq, 0, sizeof(mreq));
+	mreq.handle = fb->handle;
+	drmIoctl(drm_fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq);
+	ptr = mmap(NULL, fb->pitch * fb->height, PROT_READ, MAP_SHARED, drm_fd, mreq.offset);
+	fprintf(stderr, "mmap fd %d: %p\n", drm_fd, ptr);
+	fp = fopen("output.bin", "w");
+	fwrite(ptr, fb->pitch * fb->height, 1, fp);
+	munmap(ptr, fb->pitch * fb->height);
+	fclose(fp);
+
+
 	drmModeFreeFB(fb);
 	close(drm_fd);
 
