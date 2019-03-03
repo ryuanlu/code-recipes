@@ -44,14 +44,14 @@ void wl_registry_global(void *data, struct wl_registry *wl_registry, uint32_t na
 	struct W_context* WL = (struct W_context*)data;
 
 	if(!strcmp(interface,"wl_compositor"))
-		WL->compositor = wl_registry_bind(wl_registry, name, &wl_compositor_interface, 1);
+		WL->compositor = wl_registry_bind(wl_registry, name, &wl_compositor_interface, version);
 
 	if(!strcmp(interface, "zxdg_shell_v6"))
-		WL->xdg_shell = wl_registry_bind(wl_registry, name, &zxdg_shell_v6_interface, 1);
+		WL->xdg_shell = wl_registry_bind(wl_registry, name, &zxdg_shell_v6_interface, version);
 
 	if(!strcmp(interface, "wl_seat"))
 	{
-		WL->seat = wl_registry_bind(wl_registry, name, &wl_seat_interface, 1);
+		WL->seat = wl_registry_bind(wl_registry, name, &wl_seat_interface, version);
 		WL->pointer = wl_seat_get_pointer(WL->seat);
 	}
 }
@@ -91,12 +91,7 @@ static void xdg_toplevel_configure(void* data, struct zxdg_toplevel_v6* toplevel
 			break;
 		case ZXDG_TOPLEVEL_V6_STATE_RESIZING:
 			printf("RESIZING %d, %d ", WL->width, WL->height);
-			eglMakeCurrent(WL->EGL_display, EGL_NO_SURFACE, EGL_NO_SURFACE, WL->EGL_context);
-			eglDestroySurface(WL->EGL_display, WL->draw_surface);
-			wl_egl_window_destroy(WL->window);
-			WL->window = wl_egl_window_create(WL->surface, WL->width + width, WL->height + height);
-			WL->draw_surface = eglCreatePlatformWindowSurfaceEXT(WL->EGL_display, WL->config, WL->window, NULL);
-			eglMakeCurrent(WL->EGL_display, WL->draw_surface, WL->draw_surface, WL->EGL_context);
+			wl_egl_window_resize(WL->window, WL->width + width, WL->height + height, 0, 0);
 			break;
 		case ZXDG_TOPLEVEL_V6_STATE_ACTIVATED:
 			printf("ACTIVATED ");
@@ -144,6 +139,22 @@ void wl_pointer_axis(void *data, struct wl_pointer *wl_pointer, uint32_t time, u
 	fprintf(stderr, "%d, %d\n", axis, value);
 }
 
+void wl_pointer_frame(void *data, struct wl_pointer *wl_pointer)
+{
+}
+
+void wl_pointer_axis_source(void *data, struct wl_pointer *wl_pointer, uint32_t axis_source)
+{
+}
+
+void wl_pointer_axis_stop(void *data, struct wl_pointer *wl_pointer, uint32_t time, uint32_t axis)
+{
+}
+
+void wl_pointer_axis_discrete(void *data, struct wl_pointer *wl_pointer, uint32_t axis, int32_t discrete)
+{
+}
+
 int main(int argc, char const *argv[])
 {
 	int running = 1;
@@ -180,10 +191,10 @@ int main(int argc, char const *argv[])
 		.motion = wl_pointer_motion,
 		.button = wl_pointer_button,
 		.axis = wl_pointer_axis,
-		.frame = NULL,
-		.axis_source = NULL,
-		.axis_stop = NULL,
-		.axis_discrete = NULL
+		.frame = wl_pointer_frame,
+		.axis_source = wl_pointer_axis_source,
+		.axis_stop = wl_pointer_axis_stop,
+		.axis_discrete = wl_pointer_axis_discrete
 	};
 
 	int nr_configs;
