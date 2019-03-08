@@ -14,7 +14,7 @@ int main(int argc, char** argv)
 	int data;
 	vector *v = NULL;
 
-	v = vector_new(sizeof(void*), 100);
+	v = vector_new(sizeof(int), 100);
 
 	for(data = 0;data < 10;++data)
 	{

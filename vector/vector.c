@@ -29,7 +29,6 @@ static int vector_get_free_node(vector* obj)
 	{
 		free_node = obj->free;
 		obj->free = obj->node[obj->free].next;
-		obj->node[obj->free].prev = -1;
 	}else if(obj->size < obj->capacity)
 	{
 		free_node = obj->size;
@@ -127,6 +126,8 @@ void vector_erase(vector* obj, int position)
 
 	obj->node[i].prev = -1;
 	obj->node[i].next = obj->free;
+	if(obj->free > -1)
+		obj->node[obj->free].prev = i;
 	obj->free = i;
 }
 
