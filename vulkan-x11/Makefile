@@ -1,39 +1,37 @@
+include ../build.mk
+
+.SUFFIXES:
+.ONESHELL:
+
 GLSLC:=glslangValidator
 
-VULKAN_X11_SOURCES:=vulkan-x11.c vkhelper.c
-VULKAN_X11_PKG_CONFIG_PACKAGES:=x11
-VULKAN_X11_CFLAGS:=-Wall $(shell pkg-config --cflags $(VULKAN_X11_PKG_CONFIG_PACKAGES))
-VULKAN_X11_LDFLAGS:=$(shell pkg-config --libs $(VULKAN_X11_PKG_CONFIG_PACKAGES)) -lvulkan
-VULKAN_X11_BINARY:=vulkan-x11
+TARGET:=vulkan-x11
+
+PKG_CONFIG_PACKAGES:=x11
 
 SHADERS:=blit.vert blit.frag
 SHADER_SPVS:=$(SHADERS:%=%.spv)
 SHADER_SOURCES:=$(SHADERS:%=%.c)
-SHADER_OBJECTS:=$(SHADERS:%=%.o)
 
-.ONESHELL:
-.SUFFIXES:
+all: $(TARGET)
 
-all: $(VULKAN_X11_BINARY)
+clean: $(TARGET)_clean
+	@echo "\tCLEAN"
+	rm -f $(SHADER_SOURCES)
 
-clean:
-	rm -f *.o $(VULKAN_X11_BINARY) $(SHADER_SOURCES) $(SHADER_SPVS)
+$(TARGET)_src_files:=vulkan-x11.c vkhelper.c $(SHADER_SOURCES)
+$(TARGET)_cflags:=-Wall $(shell pkg-config --cflags $(PKG_CONFIG_PACKAGES))
+$(TARGET)_ldflags:=-Wall $(shell pkg-config --libs $(PKG_CONFIG_PACKAGES)) -lvulkan
+$(eval $(call define_c_target,$(TARGET)))
+
+$(TARGET): $(SHADER_OBJECTS)
 
 $(SHADER_SPVS): %.spv: %
-	@echo "	GLSLC	$@"
+	@echo "\tGLSLC\t$@"
 	$(GLSLC) -V $< -o $@ >/dev/null
 
 $(SHADER_SOURCES): %.c: %.spv
-	@echo "	XXD	$@"
+	@echo "\tXXD\t$@"
 	xxd -i $< > $@
 
-
-VULKAN_X11_OBJECTS:=$(VULKAN_X11_SOURCES:.c=.o) $(SHADER_OBJECTS)
-
-$(VULKAN_X11_OBJECTS): %.o: %.c
-	@echo "	CC	$@"
-	$(CC) -c $< -o $@ $(VULKAN_X11_CFLAGS)
-
-$(VULKAN_X11_BINARY): $(VULKAN_X11_OBJECTS)
-	@echo "	LD	$@"
-	$(CC) $^ -o $@ $(VULKAN_X11_LDFLAGS)
+-include $(TARGET).d

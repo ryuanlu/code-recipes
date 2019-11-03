@@ -1,25 +1,25 @@
-RESOURCES:=fb.vert fb.frag
-RESOURCE_SOURCES:=$(RESOURCES:%=%.c)
-KMSGRAB_EGL_SOURCES:=kmsgrab-egl.c
-KMSGRAB_EGL_PKG_CONFIG_PACKAGES:=egl gl libdrm gbm
-KMSGRAB_EGL_CFLAGS:=-Wall $(shell pkg-config --cflags $(KMSGRAB_EGL_PKG_CONFIG_PACKAGES))
-KMSGRAB_EGL_LDFLAGS:=$(shell pkg-config --libs $(KMSGRAB_EGL_PKG_CONFIG_PACKAGES))
-KMSGRAB_EGL_BINARY:=kmsgrab-egl
+include ../build.mk
 
 .SUFFIXES:
+.ONESHELL:
 
+TARGET:=kmsgrab
 
-all: $(KMSGRAB_EGL_BINARY)
+PKG_CONFIG_PACKAGES:=egl gl libdrm gbm
 
-clean:
-	rm -f *.o $(KMSGRAB_EGL_BINARY)
+all: $(TARGET)
+
+clean: $(TARGET)_clean
+
+RESOURCES:=fb.vert fb.frag
+RESOURCE_SOURCES:=$(RESOURCES:%=%.c)
+
+$(TARGET)_src_files:=kmsgrab-egl.c $(RESOURCE_SOURCES)
+$(TARGET)_cflags:=-Wall $(shell pkg-config --cflags $(PKG_CONFIG_PACKAGES))
+$(TARGET)_ldflags:=-Wall $(shell pkg-config --libs $(PKG_CONFIG_PACKAGES))
+$(eval $(call define_c_target,$(TARGET)))
 
 $(RESOURCE_SOURCES): %.c: %
 	xxd -i $< $@
 
-
-KMSGRAB_EGL_OBJECTS:=$(KMSGRAB_EGL_SOURCES:.c=.o) $(RESOURCE_SOURCES:.c=.o)
-$(KMSGRAB_EGL_OBJECTS): %.o: %.c
-	$(CC) -c $< -o $@ $(KMSGRAB_EGL_CFLAGS)
-$(KMSGRAB_EGL_BINARY): $(KMSGRAB_EGL_OBJECTS)
-	$(CC) $^ -o $@ $(KMSGRAB_EGL_LDFLAGS)
+-include $(TARGET).d

@@ -1,27 +1,36 @@
+include ../build.mk
+
+.SUFFIXES:
+.ONESHELL:
+
+TARGET:=egl-wayland
+
 XDG_SHELL_PROTOCOL:=xdg-shell-unstable-v6
 XDG_SHELL_PROTOCOL_SOURCE:=$(XDG_SHELL_PROTOCOL)-protocol.c
 XDG_SHELL_PROTOCOL_HEADER:=$(XDG_SHELL_PROTOCOL)-client-protocol.h
 
 XDG_SHELL_PROTOCOL_XML:=/usr/share/wayland-protocols/unstable/xdg-shell/$(XDG_SHELL_PROTOCOL).xml
 
-EGL_WAYLAND_SOURCES:=egl-wayland.c $(XDG_SHELL_PROTOCOL_SOURCE)
-EGL_WAYLAND_PKG_CONFIG_PACKAGES:=wayland-client wayland-egl egl gl
-EGL_WAYLAND_CFLAGS:=-Wall $(shell pkg-config --cflags $(EGL_WAYLAND_PKG_CONFIG_PACKAGES))
-EGL_WAYLAND_LDFLAGS:=$(shell pkg-config --libs $(EGL_WAYLAND_PKG_CONFIG_PACKAGES))
-EGL_WAYLAND_BINARY:=egl-wayland
+PKG_CONFIG_PACKAGES:=wayland-client wayland-egl egl gl
 
-all: $(EGL_WAYLAND_BINARY)
+all: $(TARGET)
 
-clean:
-	rm -f *.o $(EGL_WAYLAND_BINARY) $(XDG_SHELL_PROTOCOL_SOURCE) $(XDG_SHELL_PROTOCOL_HEADER)
+clean: $(TARGET)_clean
+	@echo "\tCLEAN"
+	rm -f $(XDG_SHELL_PROTOCOL_SOURCE) $(XDG_SHELL_PROTOCOL_HEADER)
 
-$(XDG_SHELL_PROTOCOL_SOURCE): $(XDG_SHELL_PROTOCOL_XML) $(XDG_SHELL_PROTOCOL_HEADER)
+$(TARGET)_src_files:=egl-wayland.c $(XDG_SHELL_PROTOCOL_SOURCE)
+$(TARGET)_cflags:=-Wall $(shell pkg-config --cflags $(PKG_CONFIG_PACKAGES))
+$(TARGET)_ldflags:=-Wall $(shell pkg-config --libs $(PKG_CONFIG_PACKAGES))
+$(eval $(call define_c_target,$(TARGET)))
+
+$(TARGET).d: $(XDG_SHELL_PROTOCOL_HEADER)
+
+$(XDG_SHELL_PROTOCOL_SOURCE): $(XDG_SHELL_PROTOCOL_XML)
+	@echo "\tGEN\t$@"
 	wayland-scanner private-code $< $@
 $(XDG_SHELL_PROTOCOL_HEADER): $(XDG_SHELL_PROTOCOL_XML)
+	@echo "\tGEN\t$@"
 	wayland-scanner client-header $< $@
 
-EGL_WAYLAND_OBJECTS:=$(EGL_WAYLAND_SOURCES:.c=.o)
-$(EGL_WAYLAND_OBJECTS): %.o: %.c
-	$(CC) -c $< -o $@ $(EGL_WAYLAND_CFLAGS)
-$(EGL_WAYLAND_BINARY): $(EGL_WAYLAND_OBJECTS)
-	$(CC) $^ -o $@ $(EGL_WAYLAND_LDFLAGS)
+-include $(TARGET).d

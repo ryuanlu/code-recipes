@@ -1,4 +1,5 @@
 *.o
+*.d
 *.bin
 *.vert.c
 *.frag.c

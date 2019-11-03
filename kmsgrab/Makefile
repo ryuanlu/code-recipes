@@ -1,18 +1,19 @@
-KMSGRAB_SOURCES:=kmsgrab.c
-KMSGRAB_PKG_CONFIG_PACKAGES:=libdrm
-KMSGRAB_CFLAGS:=-Wall $(shell pkg-config --cflags $(KMSGRAB_PKG_CONFIG_PACKAGES))
-KMSGRAB_LDFLAGS:=-Wall $(shell pkg-config --libs $(KMSGRAB_PKG_CONFIG_PACKAGES))
-KMSGRAB_BINARY:=kmsgrab
+include ../build.mk
 
 .SUFFIXES:
+.ONESHELL:
 
-all: $(KMSGRAB_BINARY)
+TARGET:=kmsgrab
 
-clean:
-	rm -f *.o $(KMSGRAB_BINARY)
+PKG_CONFIG_PACKAGES:=libdrm
 
-KMSGRAB_OBJECTS:=$(KMSGRAB_SOURCES:.c=.o)
-$(KMSGRAB_OBJECTS): %.o: %.c
-	$(CC) -c $< -o $@ $(KMSGRAB_CFLAGS)
-$(KMSGRAB_BINARY): $(KMSGRAB_OBJECTS)
-	$(CC) $^ -o $@ $(KMSGRAB_LDFLAGS)
+all: $(TARGET)
+
+clean: $(TARGET)_clean
+
+$(TARGET)_src_files:=kmsgrab.c
+$(TARGET)_cflags:=-Wall $(shell pkg-config --cflags $(PKG_CONFIG_PACKAGES))
+$(TARGET)_ldflags:=-Wall $(shell pkg-config --libs $(PKG_CONFIG_PACKAGES))
+$(eval $(call define_c_target,$(TARGET)))
+
+-include $(TARGET).d

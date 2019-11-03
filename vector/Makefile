@@ -1,17 +1,17 @@
-TEST_SOURCES:=test.c vector.c
-TEST_BINARY:=test
-TEST_CFLAGS:=$(CFLAGS) -Wall
-TEST_LDFLAGS:=$(LDFLAGS)
+include ../build.mk
 
-all: $(TEST_BINARY)
+.SUFFIXES:
+.ONESHELL:
 
-clean:
-	rm -f $(TEST_BINARY) *.o
+TARGET:=test
 
-TEST_OBJECTS:=$(TEST_SOURCES:.c=.o)
+all: $(TARGET)
 
-$(TEST_OBJECTS): %.o: %.c
-	$(CC) -c $< -o $@ $(TEST_CFLAGS)
+clean: $(TARGET)_clean
 
-$(TEST_BINARY): $(TEST_OBJECTS)
-	$(CC) $^ -o $@ $(TEST_LDFLAGS)
+$(TARGET)_src_files:=test.c vector.c
+$(TARGET)_cflags:=-Wall
+$(TARGET)_ldflags:=-Wall
+$(eval $(call define_c_target,$(TARGET)))
+
+-include $(TARGET).d
