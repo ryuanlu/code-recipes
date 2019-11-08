@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 #include <fcntl.h>
 #include <linux/videodev2.h>
 #include <sys/ioctl.h>
@@ -24,7 +25,9 @@ int main(int argc, char** argv)
 	XShmSegmentInfo shminfo = {0};
 	Display* display = NULL;
 	XImage* image = NULL;
-	struct timeval tv;
+	int64_t current, previous, delay;
+	struct timespec ts;
+	void* ptr[NUMBER_OF_BUFFERS];
 
 
 	display = XOpenDisplay(NULL);
@@ -56,29 +59,49 @@ int main(int argc, char** argv)
 		bufs[i].memory = reqbufs.memory;
 
 		ioctl(fd, VIDIOC_QUERYBUF, &bufs[i]);
+		ptr[i] = mmap(NULL, bufs[i].length, PROT_WRITE, MAP_SHARED, fd, bufs[i].m.offset);
 	}
 
 	ioctl(fd, VIDIOC_STREAMON, &fmt.type);
 
 	i = 0;
+	delay = 0;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	previous = ts.tv_sec * 1000000000 + ts.tv_nsec;
 
 	while(1)
 	{
-		struct v4l2_buffer buf = {};
-		char* ptr = NULL;
+		struct v4l2_buffer buf = {0};
+		struct timespec ts_delay = {0};
 
-		ptr = mmap(NULL, bufs[i].length, PROT_WRITE, MAP_SHARED, fd, bufs[i].m.offset);
-		XShmGetImage(display, RootWindow(display, 0), image, 0, 0, AllPlanes);
-		memcpy(ptr, image->data, bufs[i].length);
-		munmap(ptr, bufs[i].length);
+		if(!delay)
+		{
+			XShmGetImage(display, RootWindow(display, 0), image, 0, 0, AllPlanes);
+			XFlush(display);
+			memcpy(ptr[i], image->data, bufs[i].length);
+		}
 
-		gettimeofday(&tv, 0);
+		clock_gettime(CLOCK_MONOTONIC, &ts);
+		current = ts.tv_sec * 1000000000 + ts.tv_nsec;
+		bufs[i].timestamp.tv_sec = ts.tv_sec;
+		bufs[i].timestamp.tv_usec = ts.tv_nsec / 1000;
 
-		/* TODO: We have to calculate the accurate sleep time */
-		// usleep(16000);
+		delay = 1000000000 / 60 - (current - previous) + delay;
+		previous = current;
 
-		bufs[i].timestamp = tv;
-		ioctl(fd, VIDIOC_QBUF, &bufs[0]);
+		if(delay < 0)
+		{
+			ts_delay.tv_nsec = 0;
+		}else
+		{
+			ts_delay.tv_nsec = delay;
+			delay = 0;
+		}
+
+		nanosleep(&ts_delay, NULL);
+
+		ioctl(fd, VIDIOC_QBUF, &bufs[i]);
+
 		buf.type = reqbufs.type;
 		buf.memory = reqbufs.memory;
 		ioctl(fd, VIDIOC_DQBUF, &buf);
