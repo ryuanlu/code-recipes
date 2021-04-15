@@ -132,7 +132,7 @@ int main(int argc, char const *argv[])
 		EGL_NONE
 	};
 
-	drm_fd = open(DRI_DEVICE_NODE, O_RDWR | FD_CLOEXEC);
+	drm_fd = open(DRI_DEVICE_NODE, O_RDWR | O_CLOEXEC);
 	fb = get_fb(drm_fd);
 	drmPrimeHandleToFD(drm_fd, fb->handle, O_RDONLY, &fb_dmafd);
 	fprintf(stderr, "drm framebuffer export dmabuf as fd %d\n", fb_dmafd);
