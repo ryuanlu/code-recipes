@@ -101,18 +101,21 @@ GLuint create_vbo(GLuint position_loc, GLuint texcoord_loc)
 	return vbo;
 }
 
+static PFNEGLEXPORTDMABUFIMAGEMESAPROC __eglExportDMABUFImageMESA = NULL;
 
 int main(int argc, char const *argv[])
 {
 	drmModeFBPtr fb = NULL;
 	int drm_fd = 0;
 	int fb_dmafd = 0;
+	int fbo_fd = 0;
 	int nr_configs;
 	struct gbm_device* gbm = NULL;
 	EGLDisplay egl_display;
 	EGLContext context;
 	EGLConfig config;
 	EGLImage image;
+	EGLImage fbo_image;
 	GLuint texture;
 	GLuint vs, fs, program;
 	GLuint vbo, in_position_loc, in_texcoord_loc, src_texture_loc;
@@ -146,6 +149,8 @@ int main(int argc, char const *argv[])
 	context = eglCreateContext(egl_display, config, EGL_NO_CONTEXT, context_attributes);
 	eglMakeCurrent(egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, context);
 
+	__eglExportDMABUFImageMESA = (PFNEGLEXPORTDMABUFIMAGEMESAPROC)eglGetProcAddress("eglExportDMABUFImageMESA");
+
 	image = create_eglimage(egl_display, fb_dmafd, fb->width, fb->height);
 
 	glGenTextures(1, &texture);
@@ -173,6 +178,10 @@ int main(int argc, char const *argv[])
 	glGenTextures(1, &fbo_texture);
 	glBindTexture(GL_TEXTURE_2D, fbo_texture);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, fb->width, fb->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+
+	fbo_image = eglCreateImage(egl_display, context, EGL_GL_TEXTURE_2D, (EGLClientBuffer)(uint64_t)fbo_texture, NULL);
+	__eglExportDMABUFImageMESA(egl_display, fbo_image, &fbo_fd, NULL, NULL);
+
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fbo_texture, 0);
 
@@ -182,16 +191,14 @@ int main(int argc, char const *argv[])
 	glUniform1i(src_texture_loc, 0);
 	glClearColor(1.0, 1.0, 1.0, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
-
-	data = calloc(fb->pitch * fb->height, 1);
-
 	glDrawArrays(GL_TRIANGLES, 0, 6);
-	glReadPixels(0, 0, fb->width, fb->height, GL_RGBA, GL_UNSIGNED_BYTE, data);
+	glFinish();
 
+	data = mmap(NULL, fb->pitch * fb->height, PROT_READ, MAP_PRIVATE, fbo_fd, 0);
 	fp = fopen("output.bin", "w");
 	fwrite(data, fb->pitch * fb->height, 1, fp);
 	fclose(fp);
-	free(data);
+	munmap(data, fb->pitch * fb->height);
 
 	glDeleteFramebuffers(1, &fbo);
 	glDeleteTextures(1, &fbo_texture);
