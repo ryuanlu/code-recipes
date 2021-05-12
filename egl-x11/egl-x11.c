@@ -63,7 +63,7 @@ int main(int argc, char const *argv[])
 	eglInitialize(EGL_display, NULL, NULL);
 	eglBindAPI(EGL_OPENGL_API);
 	eglChooseConfig(EGL_display, config_attributes, &config, 1, &nr_configs);
-	draw_surface = eglCreatePlatformWindowSurfaceEXT(EGL_display, config, &window, NULL);
+	draw_surface = eglCreatePlatformWindowSurface(EGL_display, config, &window, NULL);
 	context = eglCreateContext(EGL_display, config, EGL_NO_CONTEXT, context_attributes);
 
 	eglMakeCurrent(EGL_display, draw_surface, draw_surface, context);

@@ -1,8 +1,5 @@
 include ../build.mk
 
-.SUFFIXES:
-.ONESHELL:
-
 TARGET:=egl-wayland
 
 XDG_SHELL_PROTOCOL:=xdg-shell-unstable-v6
@@ -22,9 +19,9 @@ clean: $(TARGET)_clean
 $(TARGET)_src_files:=egl-wayland.c $(XDG_SHELL_PROTOCOL_SOURCE)
 $(TARGET)_cflags:=-Wall $(shell pkg-config --cflags $(PKG_CONFIG_PACKAGES))
 $(TARGET)_ldflags:=-Wall $(shell pkg-config --libs $(PKG_CONFIG_PACKAGES))
-$(eval $(call define_c_target,$(TARGET)))
+$(eval $(call define_c_targets,$(TARGET)))
 
-$(TARGET).d: $(XDG_SHELL_PROTOCOL_HEADER)
+egl-wayland.o: | $(XDG_SHELL_PROTOCOL_HEADER)
 
 $(XDG_SHELL_PROTOCOL_SOURCE): $(XDG_SHELL_PROTOCOL_XML)
 	@echo "\tGEN\t$@"
@@ -32,5 +29,3 @@ $(XDG_SHELL_PROTOCOL_SOURCE): $(XDG_SHELL_PROTOCOL_XML)
 $(XDG_SHELL_PROTOCOL_HEADER): $(XDG_SHELL_PROTOCOL_XML)
 	@echo "\tGEN\t$@"
 	wayland-scanner client-header $< $@
-
--include $(TARGET).d

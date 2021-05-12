@@ -16,7 +16,10 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 
-#define DECLARE_SHADER_SOURCE(name)	extern unsigned char name[];extern unsigned int name ## _len;
+#define SIZEOF_BINARY(name) (&_binary_ ## name ## _end - &_binary_ ## name ## _start)
+#define DECLARE_SHADER_SOURCE(name) \
+extern unsigned char _binary_ ## name ## _start; \
+extern unsigned char _binary_ ## name ## _end;
 
 DECLARE_SHADER_SOURCE(fb_vert)
 DECLARE_SHADER_SOURCE(fb_frag)
@@ -133,8 +136,8 @@ int main(int argc, char const *argv[])
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 
-	vs = create_shader(fb_vert, fb_vert_len, GL_VERTEX_SHADER);
-	fs = create_shader(fb_frag, fb_frag_len, GL_FRAGMENT_SHADER);
+	vs = create_shader(&_binary_fb_vert_start, SIZEOF_BINARY(fb_vert), GL_VERTEX_SHADER);
+	fs = create_shader(&_binary_fb_frag_start, SIZEOF_BINARY(fb_frag), GL_FRAGMENT_SHADER);
 
 	program = glCreateProgram();
 	glAttachShader(program, vs);

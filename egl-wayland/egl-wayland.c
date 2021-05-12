@@ -241,7 +241,7 @@ int main(int argc, char const *argv[])
 	WL->window = wl_egl_window_create (WL->surface, WINDOW_WIDTH, WINDOW_HEIGHT);
 	WL->width = WINDOW_WIDTH;
 	WL->height = WINDOW_HEIGHT;
-	WL->draw_surface = eglCreatePlatformWindowSurfaceEXT(WL->EGL_display, WL->config, WL->window, NULL);
+	WL->draw_surface = eglCreatePlatformWindowSurface(WL->EGL_display, WL->config, WL->window, NULL);
 	eglMakeCurrent(WL->EGL_display, WL->draw_surface, WL->draw_surface, WL->EGL_context);
 
 	while(running)
