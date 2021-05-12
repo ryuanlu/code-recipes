@@ -23,14 +23,14 @@ DECLARE_SHADER_SOURCE(fb_frag)
 
 #define DRI_DEVICE_NODE "/dev/dri/card0"
 
+#define OUTPUT_FORMAT	GBM_FORMAT_ABGR8888
 
-drmModeFBPtr get_fb(const int drm_fd)
+drmModeFB2Ptr get_fb(const int drm_fd)
 {
 	int i;
 	drmModeResPtr res;
 	drmModeCrtcPtr crtc;
-	drmModeFBPtr fb;
-	int fb_dmafd = 0;
+	drmModeFB2Ptr fb;
 
 	drmSetClientCap(drm_fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
 	res = drmModeGetResources(drm_fd);
@@ -40,24 +40,23 @@ drmModeFBPtr get_fb(const int drm_fd)
 		crtc = drmModeGetCrtc(drm_fd, res->crtcs[i]);
 		if(!crtc || !crtc->buffer_id)
 			continue;
-		fb = drmModeGetFB(drm_fd, crtc->buffer_id);
+		fb = drmModeGetFB2(drm_fd, crtc->buffer_id);
 		drmModeFreeCrtc(crtc);
 		if(fb)
 			break;
 	}
 
-	drmPrimeHandleToFD(drm_fd, fb->handle, O_RDONLY, &fb_dmafd);
 	drmModeFreeResources(res);
 
 	return fb;
 }
 
-EGLImage create_eglimage(EGLDisplay display, int dmafd, int width, int height)
+EGLImage create_eglimage(EGLDisplay display, int dmafd, int width, int height, int fourcc)
 {
 	EGLAttrib attr[] = {
 		EGL_WIDTH, width,
 		EGL_HEIGHT, height,
-		EGL_LINUX_DRM_FOURCC_EXT, GBM_FORMAT_XBGR8888,
+		EGL_LINUX_DRM_FOURCC_EXT, fourcc,
 		EGL_DMA_BUF_PLANE0_FD_EXT, dmafd,
 		EGL_DMA_BUF_PLANE0_OFFSET_EXT, 0,
 		EGL_DMA_BUF_PLANE0_PITCH_EXT, width * 4,
@@ -76,41 +75,16 @@ GLuint create_shader(const unsigned char* src, const int length, GLenum type)
 	return shader;
 }
 
-GLuint create_vbo(GLuint position_loc, GLuint texcoord_loc)
-{
-	GLuint vbo;
-	float vertices[] = 
-	{
-		-1.0, -1.0, 0.0, 0.0,
-		1.0, 1.0, 1.0, 1.0,
-		-1.0, 1.0, 0.0, 1.0,
-		-1.0, -1.0, 0.0, 0.0,
-		1.0, -1.0, 1.0, 0.0,
-		1.0, 1.0, 1.0, 1.0,
-	};
-
-	glGenBuffers(1, &vbo);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-	glEnableVertexAttribArray(position_loc);
-	glVertexAttribPointer(position_loc, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4, (void*)0);
-	glEnableVertexAttribArray(texcoord_loc);
-	glVertexAttribPointer(texcoord_loc, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4, (void*)(sizeof(float) * 2));
-
-	return vbo;
-}
-
-static PFNEGLEXPORTDMABUFIMAGEMESAPROC __eglExportDMABUFImageMESA = NULL;
 
 int main(int argc, char const *argv[])
 {
-	drmModeFBPtr fb = NULL;
+	drmModeFB2Ptr fb = NULL;
 	int drm_fd = 0;
 	int fb_dmafd = 0;
-	int fbo_fd = 0;
+	int fbo_dmafd = 0;
 	int nr_configs;
 	struct gbm_device* gbm = NULL;
+	struct gbm_bo* bo = NULL;
 	EGLDisplay egl_display;
 	EGLContext context;
 	EGLConfig config;
@@ -118,7 +92,7 @@ int main(int argc, char const *argv[])
 	EGLImage fbo_image;
 	GLuint texture;
 	GLuint vs, fs, program;
-	GLuint vbo, in_position_loc, in_texcoord_loc, src_texture_loc;
+	GLuint src_texture_loc;
 	GLuint fbo, fbo_texture;
 	char* data = NULL;
 	FILE* fp = NULL;
@@ -136,10 +110,6 @@ int main(int argc, char const *argv[])
 	};
 
 	drm_fd = open(DRI_DEVICE_NODE, O_RDWR | O_CLOEXEC);
-	fb = get_fb(drm_fd);
-	drmPrimeHandleToFD(drm_fd, fb->handle, O_RDONLY, &fb_dmafd);
-	fprintf(stderr, "drm framebuffer export dmabuf as fd %d\n", fb_dmafd);
-
 
 	gbm = gbm_create_device(drm_fd);
 	egl_display = eglGetPlatformDisplay(EGL_PLATFORM_GBM_KHR, gbm, NULL);
@@ -149,13 +119,19 @@ int main(int argc, char const *argv[])
 	context = eglCreateContext(egl_display, config, EGL_NO_CONTEXT, context_attributes);
 	eglMakeCurrent(egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, context);
 
-	__eglExportDMABUFImageMESA = (PFNEGLEXPORTDMABUFIMAGEMESAPROC)eglGetProcAddress("eglExportDMABUFImageMESA");
 
-	image = create_eglimage(egl_display, fb_dmafd, fb->width, fb->height);
+	fb = get_fb(drm_fd);
+	drmPrimeHandleToFD(drm_fd, fb->handles[0], O_RDONLY, &fb_dmafd);
+	image = create_eglimage(egl_display, fb_dmafd, fb->width, fb->height, fb->pixel_format);
 
 	glGenTextures(1, &texture);
-	glBindTexture(GL_TEXTURE_EXTERNAL_OES, texture);
-	glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, (GLeglImageOES)image);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, (GLeglImageOES)image);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
 
 	vs = create_shader(fb_vert, fb_vert_len, GL_VERTEX_SHADER);
 	fs = create_shader(fb_frag, fb_frag_len, GL_FRAGMENT_SHADER);
@@ -164,51 +140,54 @@ int main(int argc, char const *argv[])
 	glAttachShader(program, vs);
 	glAttachShader(program, fs);
 	glLinkProgram(program);
-	in_position_loc = glGetAttribLocation(program, "in_position");
-	in_texcoord_loc = glGetAttribLocation(program, "in_texcoord");
 	src_texture_loc = glGetUniformLocation(program, "src_texture");
 
 	glDeleteShader(vs);
 	glDeleteShader(fs);
 	glUseProgram(program);
 
-	vbo = create_vbo(in_position_loc, in_texcoord_loc);
 
-	glGenFramebuffers(1, &fbo);
+	bo = gbm_bo_create(gbm, fb->width, fb->height, OUTPUT_FORMAT, GBM_BO_USE_LINEAR|GBM_BO_USE_RENDERING);
+	fbo_dmafd = gbm_bo_get_fd(bo);
+
 	glGenTextures(1, &fbo_texture);
 	glBindTexture(GL_TEXTURE_2D, fbo_texture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, fb->width, fb->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	fbo_image = create_eglimage(egl_display, fbo_dmafd, fb->width, fb->height, OUTPUT_FORMAT);
+	glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, (GLeglImageOES)fbo_image);
 
-	fbo_image = eglCreateImage(egl_display, context, EGL_GL_TEXTURE_2D, (EGLClientBuffer)(uint64_t)fbo_texture, NULL);
-	__eglExportDMABUFImageMESA(egl_display, fbo_image, &fbo_fd, NULL, NULL);
-
+	glGenFramebuffers(1, &fbo);
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fbo_texture, 0);
 
+
 	glViewport(0, 0, fb->width, fb->height);
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_EXTERNAL_OES, texture);
+	glBindTexture(GL_TEXTURE_2D, texture);
 	glUniform1i(src_texture_loc, 0);
 	glClearColor(1.0, 1.0, 1.0, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glFinish();
 
-	data = mmap(NULL, fb->pitch * fb->height, PROT_READ, MAP_PRIVATE, fbo_fd, 0);
+
+	data = mmap(NULL, fb->pitches[0] * fb->height, PROT_READ, MAP_PRIVATE, fbo_dmafd, 0);
 	fp = fopen("output.bin", "w");
-	fwrite(data, fb->pitch * fb->height, 1, fp);
+	fwrite(data, fb->pitches[0] * fb->height, 1, fp);
 	fclose(fp);
-	munmap(data, fb->pitch * fb->height);
+	munmap(data, fb->pitches[0] * fb->height);
+
 
 	glDeleteFramebuffers(1, &fbo);
-	glDeleteTextures(1, &fbo_texture);
-	glDeleteBuffers(1, &vbo);
 	glDeleteProgram(program);
+	glDeleteTextures(1, &fbo_texture);
 	glDeleteTextures(1, &texture);
+	eglDestroyImage(egl_display, fbo_image);
 	eglDestroyImage(egl_display, image);
 	eglDestroyContext(egl_display, context);
 	eglTerminate(egl_display);
-	drmModeFreeFB(fb);
+	drmModeFreeFB2(fb);
+	gbm_bo_destroy(bo);
+	gbm_device_destroy(gbm);
 	close(drm_fd);
 
 	return EXIT_SUCCESS;
