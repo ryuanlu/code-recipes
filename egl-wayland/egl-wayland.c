@@ -1,10 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wayland-client-protocol.h>
 #include <wayland-egl.h>
 #include <wayland-client.h>
 #include <linux/input-event-codes.h>
-#include "xdg-shell-unstable-v6-client-protocol.h"
+#include "xdg-shell-client-protocol.h"
 
 #define EGL_EGLEXT_PROTOTYPES
 #define GL_GLEXT_PROTOTYPES
@@ -23,9 +24,9 @@ struct W_context
 	struct wl_compositor*		compositor;
 	struct wl_surface*		surface;
 
-	struct zxdg_shell_v6*		xdg_shell;
-	struct zxdg_surface_v6*		xdg_surface;
-	struct zxdg_toplevel_v6*	xdg_toplevel;
+	struct xdg_wm_base*		xdg_shell;
+	struct xdg_surface*		xdg_surface;
+	struct xdg_toplevel*		xdg_toplevel;
 
 	struct wl_egl_window*		window;
 	struct wl_seat*			seat;
@@ -46,8 +47,8 @@ void wl_registry_global(void *data, struct wl_registry *wl_registry, uint32_t na
 	if(!strcmp(interface,"wl_compositor"))
 		WL->compositor = wl_registry_bind(wl_registry, name, &wl_compositor_interface, version);
 
-	if(!strcmp(interface, "zxdg_shell_v6"))
-		WL->xdg_shell = wl_registry_bind(wl_registry, name, &zxdg_shell_v6_interface, version);
+	if(!strcmp(interface, "xdg_wm_base"))
+		WL->xdg_shell = wl_registry_bind(wl_registry, name, &xdg_wm_base_interface, version);
 
 	if(!strcmp(interface, "wl_seat"))
 	{
@@ -58,21 +59,21 @@ void wl_registry_global(void *data, struct wl_registry *wl_registry, uint32_t na
 
 void wl_registry_global_remove(void *data, struct wl_registry *wl_registry, uint32_t name) {}
 
-static void xdg_shell_ping(void* data, struct zxdg_shell_v6* xdg_shell, uint32_t serial)
+static void xdg_shell_ping(void* data, struct xdg_wm_base* xdg_wm_base, uint32_t serial)
 {
-	zxdg_shell_v6_pong(xdg_shell, serial);
+	xdg_wm_base_pong(xdg_wm_base, serial);
 }
 
-static void xdg_surface_configure(void* data, struct zxdg_surface_v6* surface, uint32_t serial)
+static void xdg_surface_configure(void* data, struct xdg_surface* surface, uint32_t serial)
 {
 	struct W_context* WL = (struct W_context*)data;
-	zxdg_surface_v6_ack_configure(surface, serial);
+	xdg_surface_ack_configure(surface, serial);
 	glClearColor (0.0, 1.0, 0.0, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
 	eglSwapBuffers(WL->EGL_display, WL->draw_surface);
 }
 
-static void xdg_toplevel_configure(void* data, struct zxdg_toplevel_v6* toplevel, int32_t width, int32_t height, struct wl_array* states)
+static void xdg_toplevel_configure(void* data, struct xdg_toplevel* toplevel, int32_t width, int32_t height, struct wl_array* states)
 {
 	struct W_context* WL = (struct W_context*)data;
 	uint32_t *ps;
@@ -83,17 +84,17 @@ static void xdg_toplevel_configure(void* data, struct zxdg_toplevel_v6* toplevel
 	{
 		switch(*ps)
 		{
-		case ZXDG_TOPLEVEL_V6_STATE_MAXIMIZED:
+		case XDG_TOPLEVEL_STATE_MAXIMIZED:
 			printf("MAXIMIZED ");
 			break;
-		case ZXDG_TOPLEVEL_V6_STATE_FULLSCREEN:
+		case XDG_TOPLEVEL_STATE_FULLSCREEN:
 			printf("FULLSCREEN ");
 			break;
-		case ZXDG_TOPLEVEL_V6_STATE_RESIZING:
+		case XDG_TOPLEVEL_STATE_RESIZING:
 			printf("RESIZING %d, %d ", WL->width, WL->height);
 			wl_egl_window_resize(WL->window, WL->width + width, WL->height + height, 0, 0);
 			break;
-		case ZXDG_TOPLEVEL_V6_STATE_ACTIVATED:
+		case XDG_TOPLEVEL_STATE_ACTIVATED:
 			printf("ACTIVATED ");
 			break;
 		}
@@ -102,7 +103,7 @@ static void xdg_toplevel_configure(void* data, struct zxdg_toplevel_v6* toplevel
 	printf("\n");
 }
 
-static void xdg_toplevel_close(void* data, struct zxdg_toplevel_v6* toplevel)
+static void xdg_toplevel_close(void* data, struct xdg_toplevel* toplevel)
 {
 }
 
@@ -124,13 +125,13 @@ void wl_pointer_button(void *data, struct wl_pointer *wl_pointer, uint32_t seria
 	if(button == BTN_LEFT && state == WL_POINTER_BUTTON_STATE_PRESSED)
 	{
 		fprintf(stderr, "Move\n");
-		zxdg_toplevel_v6_move(WL->xdg_toplevel, WL->seat, serial);
+		xdg_toplevel_move(WL->xdg_toplevel, WL->seat, serial);
 	}
 
 	if(button == BTN_RIGHT && state == WL_POINTER_BUTTON_STATE_PRESSED)
 	{
 		fprintf(stderr, "resize\n");
-		zxdg_toplevel_v6_resize(WL->xdg_toplevel, WL->seat, serial, ZXDG_TOPLEVEL_V6_RESIZE_EDGE_BOTTOM_RIGHT);
+		xdg_toplevel_resize(WL->xdg_toplevel, WL->seat, serial, XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM_RIGHT);
 	}
 }
 
@@ -168,17 +169,17 @@ int main(int argc, char const *argv[])
 		.global_remove = wl_registry_global_remove
 	};
 
-	const struct zxdg_shell_v6_listener xdg_shell_listener =
+	const struct xdg_wm_base_listener xdg_shell_listener =
 	{
 		.ping = xdg_shell_ping,
 	};
 
-	const struct zxdg_surface_v6_listener xdg_surface_listener =
+	const struct xdg_surface_listener xdg_surface_listener =
 	{
 		.configure = xdg_surface_configure,
 	};
 
-	const struct zxdg_toplevel_v6_listener xdg_toplevel_listener =
+	const struct xdg_toplevel_listener xdg_toplevel_listener =
 	{
 		.configure = xdg_toplevel_configure,
 		.close = xdg_toplevel_close,
@@ -218,15 +219,15 @@ int main(int argc, char const *argv[])
 	W_registry = wl_display_get_registry(W_display);
 	wl_registry_add_listener(W_registry, &registry_listener, WL);
 	wl_display_roundtrip(W_display);
-	zxdg_shell_v6_add_listener(WL->xdg_shell, &xdg_shell_listener, NULL);
+	xdg_wm_base_add_listener(WL->xdg_shell, &xdg_shell_listener, NULL);
 
 	WL->surface = wl_compositor_create_surface(WL->compositor);
 
-	WL->xdg_surface = zxdg_shell_v6_get_xdg_surface(WL->xdg_shell, WL->surface);
-	zxdg_surface_v6_add_listener(WL->xdg_surface, &xdg_surface_listener, WL);
+	WL->xdg_surface = xdg_wm_base_get_xdg_surface(WL->xdg_shell, WL->surface);
+	xdg_surface_add_listener(WL->xdg_surface, &xdg_surface_listener, WL);
 
-	WL->xdg_toplevel = zxdg_surface_v6_get_toplevel(WL->xdg_surface);
-	zxdg_toplevel_v6_add_listener(WL->xdg_toplevel, &xdg_toplevel_listener, WL);
+	WL->xdg_toplevel = xdg_surface_get_toplevel(WL->xdg_surface);
+	xdg_toplevel_add_listener(WL->xdg_toplevel, &xdg_toplevel_listener, WL);
 
 	wl_surface_commit(WL->surface);
 
