@@ -31,8 +31,6 @@ struct W_context
 	struct wl_egl_window*		window;
 	struct wl_seat*			seat;
 	struct wl_pointer*		pointer;
-	int				width;
-	int				height;
 
 	EGLDisplay			EGL_display;
 	EGLSurface			draw_surface;
@@ -78,7 +76,7 @@ static void xdg_toplevel_configure(void* data, struct xdg_toplevel* toplevel, in
 	struct W_context* WL = (struct W_context*)data;
 	uint32_t *ps;
 
-	printf("toplevel-configure: w %d, h %d / states: ", width, height);
+	printf("toplevel-configure: ");
 
 	wl_array_for_each(ps, states)
 	{
@@ -91,8 +89,8 @@ static void xdg_toplevel_configure(void* data, struct xdg_toplevel* toplevel, in
 			printf("FULLSCREEN ");
 			break;
 		case XDG_TOPLEVEL_STATE_RESIZING:
-			printf("RESIZING %d, %d ", WL->width, WL->height);
-			wl_egl_window_resize(WL->window, WL->width + width, WL->height + height, 0, 0);
+			printf("RESIZING %d, %d ", width, height);
+			wl_egl_window_resize(WL->window, width, height, 0, 0);
 			break;
 		case XDG_TOPLEVEL_STATE_ACTIVATED:
 			printf("ACTIVATED ");
@@ -122,11 +120,17 @@ void wl_pointer_motion(void *data, struct wl_pointer *wl_pointer, uint32_t time,
 void wl_pointer_button(void *data, struct wl_pointer *wl_pointer, uint32_t serial, uint32_t time, uint32_t button, uint32_t state)
 {
 	struct W_context* WL = (struct W_context*)data;
+
 	if(button == BTN_LEFT && state == WL_POINTER_BUTTON_STATE_PRESSED)
 	{
 		fprintf(stderr, "Move\n");
 		xdg_toplevel_move(WL->xdg_toplevel, WL->seat, serial);
 	}
+
+	/*
+		To use the right button with Gnome's mutter compositor,
+		set /org/gnome/desktop/wm/preferences/resize-with-right-button to true
+	*/
 
 	if(button == BTN_RIGHT && state == WL_POINTER_BUTTON_STATE_PRESSED)
 	{
@@ -137,7 +141,6 @@ void wl_pointer_button(void *data, struct wl_pointer *wl_pointer, uint32_t seria
 
 void wl_pointer_axis(void *data, struct wl_pointer *wl_pointer, uint32_t time, uint32_t axis, wl_fixed_t value)
 {
-	fprintf(stderr, "%d, %d\n", axis, value);
 }
 
 void wl_pointer_frame(void *data, struct wl_pointer *wl_pointer)
@@ -240,8 +243,6 @@ int main(int argc, char const *argv[])
 	WL->EGL_context = eglCreateContext(WL->EGL_display, WL->config, EGL_NO_CONTEXT, context_attributes);
 
 	WL->window = wl_egl_window_create (WL->surface, WINDOW_WIDTH, WINDOW_HEIGHT);
-	WL->width = WINDOW_WIDTH;
-	WL->height = WINDOW_HEIGHT;
 	WL->draw_surface = eglCreatePlatformWindowSurface(WL->EGL_display, WL->config, WL->window, NULL);
 	eglMakeCurrent(WL->EGL_display, WL->draw_surface, WL->draw_surface, WL->EGL_context);
 
