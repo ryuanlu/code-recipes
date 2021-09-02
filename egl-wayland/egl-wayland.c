@@ -36,6 +36,9 @@ struct W_context
 	EGLSurface			draw_surface;
 	EGLContext			EGL_context;
 	EGLConfig			config;
+
+	int				pointer_x;
+	int				pointer_y;
 };
 
 void wl_registry_global(void *data, struct wl_registry *wl_registry, uint32_t name, const char *interface, uint32_t version)
@@ -107,6 +110,9 @@ static void xdg_toplevel_close(void* data, struct xdg_toplevel* toplevel)
 
 void wl_pointer_enter(void *data, struct wl_pointer *wl_pointer, uint32_t serial, struct wl_surface *surface, wl_fixed_t surface_x, wl_fixed_t surface_y)
 {
+	struct W_context* WL = (struct W_context*)data;
+	WL->pointer_x = surface_x >> 8;
+	WL->pointer_y = surface_y >> 8;
 }
 
 void wl_pointer_leave(void *data, struct wl_pointer *wl_pointer, uint32_t serial, struct wl_surface *surface)
@@ -115,12 +121,16 @@ void wl_pointer_leave(void *data, struct wl_pointer *wl_pointer, uint32_t serial
 
 void wl_pointer_motion(void *data, struct wl_pointer *wl_pointer, uint32_t time, wl_fixed_t surface_x, wl_fixed_t surface_y)
 {
+	struct W_context* WL = (struct W_context*)data;
+	WL->pointer_x = surface_x >> 8;
+	WL->pointer_y = surface_y >> 8;
 }
 
 void wl_pointer_button(void *data, struct wl_pointer *wl_pointer, uint32_t serial, uint32_t time, uint32_t button, uint32_t state)
 {
 	struct W_context* WL = (struct W_context*)data;
 
+	printf("mouse %d, %d\n", WL->pointer_x, WL->pointer_y);
 	if(button == BTN_LEFT && state == WL_POINTER_BUTTON_STATE_PRESSED)
 	{
 		fprintf(stderr, "Move\n");
