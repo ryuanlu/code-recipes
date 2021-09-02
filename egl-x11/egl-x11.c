@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <string.h>
-#include <sys/time.h>
+#include <time.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
@@ -19,7 +19,7 @@
 int main(int argc, char const *argv[])
 {
 	int quit = False;
-	Display		*X_display = NULL;
+	Display*	X_display = NULL;
 	Window		window;
 	XTextProperty	title;
 	XEvent		event;
@@ -31,7 +31,7 @@ int main(int argc, char const *argv[])
 	int nr_configs;
 	EGLConfig	config;
 
-	struct timeval	ts_a, ts_b;
+	struct timespec	ts_a, ts_b;
 
 	EGLint config_attributes[] =
 	{
@@ -72,12 +72,12 @@ int main(int argc, char const *argv[])
 	while(!quit)
 	{
 		float fps;
-		gettimeofday(&ts_a, NULL);
+		clock_gettime(CLOCK_MONOTONIC, &ts_a);
 		glClearColor(1.0, 1.0, 1.0, 1.0);
 		glClear(GL_COLOR_BUFFER_BIT);
 		eglSwapBuffers(EGL_display, draw_surface);
-		gettimeofday(&ts_b, NULL);
-		fps = 1000000.0f / ((ts_b.tv_sec - ts_a.tv_sec) * 1000000 + (ts_b.tv_usec - ts_a.tv_usec));
+		clock_gettime(CLOCK_MONOTONIC, &ts_b);
+		fps = 1000.0 / ((ts_b.tv_sec - ts_a.tv_sec) * 1000 + (float)(ts_b.tv_nsec - ts_a.tv_nsec) / 1000000);
 		fprintf(stderr, "%.2f\n", fps);
 
 

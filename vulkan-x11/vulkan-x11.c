@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/time.h>
+#include <time.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
@@ -79,7 +79,7 @@ int main(int argc, char const *argv[])
 
 	unsigned int index;
 
-	struct timeval	ts_a, ts_b;
+	struct timespec	ts_a, ts_b;
 
 	X_display = XOpenDisplay(NULL);
 	window = XCreateWindow(X_display, RootWindow(X_display, 0), 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, 0,  CopyFromParent, CopyFromParent,  CopyFromParent, 0, NULL);
@@ -306,7 +306,7 @@ int main(int argc, char const *argv[])
 		float fps;
 		VkCommandBuffer cmdbuf;
 
-		gettimeofday(&ts_a, NULL);
+		clock_gettime(CLOCK_MONOTONIC, &ts_a);
 
 		index = vkhelper_acquire_next_index(vdevice);
 
@@ -334,9 +334,9 @@ int main(int argc, char const *argv[])
 
 		vkhelper_queue_present(vdevice, index);
 
-		gettimeofday(&ts_b, NULL);
-		fps = 1000000.0f / ((ts_b.tv_sec - ts_a.tv_sec) * 1000000 + (ts_b.tv_usec - ts_a.tv_usec));
-		fprintf(stderr, "%3.2f\r", fps);
+		clock_gettime(CLOCK_MONOTONIC, &ts_b);
+		fps = 1000.0f / ((ts_b.tv_sec - ts_a.tv_sec) * 1000 + (float)(ts_b.tv_nsec - ts_a.tv_nsec) / 1000000);
+		fprintf(stderr, "%3.2f\n", fps);
 
 		if(XPending(X_display))
 		{
