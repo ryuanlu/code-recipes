@@ -74,7 +74,10 @@ static void xdg_surface_configure(void* data, struct xdg_surface* surface, uint3
 {
 	struct W_context* WL = (struct W_context*)data;
 	xdg_surface_ack_configure(surface, serial);
-	glClearColor (0.0, 1.0, 0.0, 1.0);
+
+	/* Premultiplied alpha */
+	glClearColor (0.0, 0.5, 0.0, 0.5);
+
 	glClear(GL_COLOR_BUFFER_BIT);
 	eglSwapBuffers(WL->EGL_display, WL->draw_surface);
 }
@@ -262,6 +265,7 @@ int main(int argc, char const *argv[])
 	{
 		EGL_RENDERABLE_TYPE,		EGL_OPENGL_BIT,
 		EGL_SURFACE_TYPE,		EGL_WINDOW_BIT,
+		EGL_ALPHA_SIZE,			8,
 		EGL_NONE,
 	};
 
