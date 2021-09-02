@@ -21,6 +21,7 @@
 
 struct W_context
 {
+	int				running;
 	struct wl_compositor*		compositor;
 	struct wl_surface*		surface;
 
@@ -31,6 +32,7 @@ struct W_context
 	struct wl_egl_window*		window;
 	struct wl_seat*			seat;
 	struct wl_pointer*		pointer;
+	struct wl_keyboard*		keyboard;
 
 	EGLDisplay			EGL_display;
 	EGLSurface			draw_surface;
@@ -55,7 +57,10 @@ void wl_registry_global(void *data, struct wl_registry *wl_registry, uint32_t na
 	{
 		WL->seat = wl_registry_bind(wl_registry, name, &wl_seat_interface, version);
 		WL->pointer = wl_seat_get_pointer(WL->seat);
+		WL->keyboard = wl_seat_get_keyboard(WL->seat);
 	}
+
+	printf("%s\n", interface);
 }
 
 void wl_registry_global_remove(void *data, struct wl_registry *wl_registry, uint32_t name) {}
@@ -169,9 +174,39 @@ void wl_pointer_axis_discrete(void *data, struct wl_pointer *wl_pointer, uint32_
 {
 }
 
+void wl_keyboard_keymap(void *data, struct wl_keyboard *wl_keyboard, uint32_t format, int32_t fd, uint32_t size)
+{
+}
+
+void wl_keyboard_enter(void *data, struct wl_keyboard *wl_keyboard, uint32_t serial, struct wl_surface *surface, struct wl_array *keys)
+{
+}
+
+void wl_keyboard_leave(void *data, struct wl_keyboard *wl_keyboard, uint32_t serial, struct wl_surface *surface)
+{
+}
+
+void wl_keyboard_key(void *data, struct wl_keyboard *wl_keyboard, uint32_t serial, uint32_t time, uint32_t key, uint32_t state)
+{
+	struct W_context* WL = (struct W_context*)data;
+
+	printf("key: %d, %d\n", key, state);
+
+	if(key == KEY_Q && state == WL_KEYBOARD_KEY_STATE_PRESSED)
+		WL->running = 0;
+}
+
+void wl_keyboard_modifiers(void *data, struct wl_keyboard *wl_keyboard, uint32_t serial, uint32_t mods_depressed, uint32_t mods_latched, uint32_t mods_locked, uint32_t group)
+{
+}
+
+void wl_keyboard_repeat_info(void *data, struct wl_keyboard *wl_keyboard, int32_t rate, int32_t delay)
+{
+}
+
+
 int main(int argc, char const *argv[])
 {
-	int running = 1;
 	struct W_context* WL = NULL;
 	struct wl_display* W_display;
 	struct wl_registry* W_registry;
@@ -211,6 +246,16 @@ int main(int argc, char const *argv[])
 		.axis_discrete = wl_pointer_axis_discrete
 	};
 
+	const struct wl_keyboard_listener keyboard_listener =
+	{
+		.keymap = wl_keyboard_keymap,
+		.enter = wl_keyboard_enter,
+		.leave = wl_keyboard_leave,
+		.key = wl_keyboard_key,
+		.modifiers = wl_keyboard_modifiers,
+		.repeat_info = wl_keyboard_repeat_info,
+	};
+
 	int nr_configs;
 
 	EGLint config_attributes[] =
@@ -228,6 +273,7 @@ int main(int argc, char const *argv[])
 
 	WL = calloc(sizeof(struct W_context), 1);
 
+	WL->running = 1;
 	W_display = wl_display_connect(NULL);
 	W_registry = wl_display_get_registry(W_display);
 	wl_registry_add_listener(W_registry, &registry_listener, WL);
@@ -245,6 +291,7 @@ int main(int argc, char const *argv[])
 	wl_surface_commit(WL->surface);
 
 	wl_pointer_add_listener(WL->pointer, &pointer_listener, WL);
+	wl_keyboard_add_listener(WL->keyboard, &keyboard_listener, WL);
 
 	WL->EGL_display = eglGetPlatformDisplayEXT(EGL_PLATFORM_WAYLAND_EXT, W_display, NULL);
 	eglInitialize(WL->EGL_display, NULL, NULL);
@@ -256,7 +303,7 @@ int main(int argc, char const *argv[])
 	WL->draw_surface = eglCreatePlatformWindowSurface(WL->EGL_display, WL->config, WL->window, NULL);
 	eglMakeCurrent(WL->EGL_display, WL->draw_surface, WL->draw_surface, WL->EGL_context);
 
-	while(running)
+	while(WL->running)
 		wl_display_dispatch(W_display);
 
 	wl_registry_destroy(W_registry);
