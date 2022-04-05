@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <string.h>
 
 #define EGL_EGLEXT_PROTOTYPES
 #define GL_GLEXT_PROTOTYPES
@@ -15,6 +16,10 @@
 #include <GLES2/gl2ext.h>
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
+#include <drm_fourcc.h>
+#include <va/va.h>
+#include <va/va_drm.h>
+#include <va/va_drmcommon.h>
 
 #define SIZEOF_BINARY(name) (&_binary_ ## name ## _end - &_binary_ ## name ## _start)
 #define DECLARE_SHADER_SOURCE(name) \
@@ -78,6 +83,70 @@ GLuint create_shader(const unsigned char* src, const int length, GLenum type)
 	return shader;
 }
 
+void write_with_vaapi(int drm_fd, int dma_fd, int width, int height, int pitch, const char* output_file)
+{
+	VADisplay va_display;
+	int major, minor;
+	VADRMPRIMESurfaceDescriptor drm_surface_desc;
+	VASurfaceAttrib va_surface_attrs[2];
+	VASurfaceID va_surface;
+	VAImage va_image;
+	VAImageFormat va_format;
+	FILE* fp = NULL;
+	void* ptr = NULL;
+
+	va_surface_attrs[0].type		= VASurfaceAttribMemoryType;
+	va_surface_attrs[0].flags		= VA_SURFACE_ATTRIB_SETTABLE;
+	va_surface_attrs[0].value.type		= VAGenericValueTypeInteger;
+	va_surface_attrs[0].value.value.i	= VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2;
+	va_surface_attrs[1].type		= VASurfaceAttribExternalBufferDescriptor;
+	va_surface_attrs[1].flags		= VA_SURFACE_ATTRIB_SETTABLE;
+	va_surface_attrs[1].value.type		= VAGenericValueTypePointer;
+	va_surface_attrs[1].value.value.p	= &drm_surface_desc;
+
+	drm_surface_desc.fourcc = VA_FOURCC_RGBA;
+	drm_surface_desc.width = width;
+	drm_surface_desc.height = height;
+	drm_surface_desc.num_objects = 1;
+	drm_surface_desc.objects[0].fd = dma_fd;
+	drm_surface_desc.objects[0].size = pitch * height;
+	drm_surface_desc.objects[0].drm_format_modifier = 0;
+
+	drm_surface_desc.num_layers = 1;
+	drm_surface_desc.layers[0].drm_format = DRM_FORMAT_ABGR8888;
+	drm_surface_desc.layers[0].num_planes = 1;
+
+	drm_surface_desc.layers[0].pitch[0] = pitch;
+	drm_surface_desc.layers[0].offset[0] = 0;
+	drm_surface_desc.layers[0].object_index[0] = 0;
+
+	va_display = vaGetDisplayDRM(drm_fd);
+	vaInitialize(va_display, &major, &minor);
+	vaCreateSurfaces(va_display, VA_RT_FORMAT_RGB32, width, height, &va_surface, 1, va_surface_attrs, 2);
+
+	va_image.image_id = VA_INVALID_ID;
+	va_image.buf = VA_INVALID_ID;
+
+	va_format.fourcc = VA_FOURCC_RGBA;
+	va_format.bits_per_pixel = 32;
+	va_format.byte_order = VA_LSB_FIRST;
+
+	vaCreateImage(va_display, &va_format, width, height, &va_image);
+	vaGetImage(va_display, va_surface, 0, 0, width, height, va_image.image_id);
+	vaMapBuffer(va_display, va_image.buf, &ptr);
+
+	fp = fopen(output_file, "w");
+	fwrite(ptr, pitch * height, 1, fp);
+	fclose(fp);
+
+	vaUnmapBuffer(va_display, va_image.buf);
+	vaDestroyImage(va_display, va_image.image_id);
+
+	vaTerminate(va_display);
+
+}
+
+
 
 int main(int argc, char const *argv[])
 {
@@ -97,8 +166,18 @@ int main(int argc, char const *argv[])
 	GLuint vs, fs, program;
 	GLuint src_texture_loc;
 	GLuint fbo, fbo_texture;
-	char* data = NULL;
+	void* data = NULL;
 	FILE* fp = NULL;
+
+	enum
+	{
+		USE_VAAPI = 0,		// Fast, need GBM_BO_USE_LINEAR to get correct image
+		USE_GLREADPIXELS,	// Fast and always correct. Basicly uses the same ioctls to vaGetImage.
+		USE_GBM_BO_MAP,		// Fast and always correct. It uses more ioctls than vaGetImage and glReadPixels.
+		USE_DIRECT_MMAP		// Super slow. It doesn't work without GBM_BO_USE_LINEAR. No other ioctls involved.
+	};
+
+	int map_method = USE_GLREADPIXELS;
 
 	EGLint config_attributes[] =
 	{
@@ -173,12 +252,28 @@ int main(int argc, char const *argv[])
 	glFinish();
 
 
-	data = mmap(NULL, fb->pitches[0] * fb->height, PROT_READ, MAP_PRIVATE, fbo_dmafd, 0);
-	fp = fopen("output.bin", "w");
-	fwrite(data, fb->pitches[0] * fb->height, 1, fp);
-	fclose(fp);
-	munmap(data, fb->pitches[0] * fb->height);
+	if(map_method == USE_VAAPI)
+	{
+		write_with_vaapi(drm_fd, fbo_dmafd, fb->width, fb->height, fb->pitches[0], "output.bin");
+	}else
+	{
+		if(map_method == USE_GLREADPIXELS)
+		{
+			data = calloc(fb->pitches[0] * fb->height, 1);
+			glReadPixels(0, 0, fb->width, fb->height, GL_RGBA, GL_UNSIGNED_BYTE, data);
+		}else if(map_method == USE_GBM_BO_MAP)
+		{
+			unsigned int stride = 0;
+			data = gbm_bo_map(bo, 0, 0, fb->width, fb->height, GBM_BO_TRANSFER_READ, &stride, &data);
+		}else
+		{
+			data = mmap(NULL, fb->pitches[0] * fb->height, PROT_READ, MAP_SHARED, fbo_dmafd, 0);
+		}
 
+		fp = fopen("output.bin", "w");
+		fwrite(data, fb->pitches[0] * fb->height, 1, fp);
+		fclose(fp);
+	}
 
 	glDeleteFramebuffers(1, &fbo);
 	glDeleteProgram(program);
