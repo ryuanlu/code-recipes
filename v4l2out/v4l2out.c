@@ -7,14 +7,21 @@
 #include <linux/videodev2.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-#include <X11/extensions/XShm.h>
-#include <sys/shm.h>
-#include <sys/ipc.h>
+#include "xshm.h"
+#include "kms.h"
 
 #define V4L2_DEVICE_NODE	"/dev/video9"
 #define NUMBER_OF_BUFFERS	(2)
+
+
+typedef void* (*PFN_CONTEXT_INIT)(void);
+typedef void (*PFN_FRAME_COPY)(void* context, char* dest, int size);
+typedef void (*PFN_CONTEXT_DESTROY)(void* context);
+
+PFN_CONTEXT_INIT	context_init = NULL;
+PFN_FRAME_COPY		frame_copy = NULL;
+PFN_CONTEXT_DESTROY	context_destroy = NULL;
+
 
 int main(int argc, char** argv)
 {
@@ -22,20 +29,19 @@ int main(int argc, char** argv)
 	struct v4l2_format fmt = {0};
 	struct v4l2_requestbuffers reqbufs = {0};
 	struct v4l2_buffer bufs[NUMBER_OF_BUFFERS];
-	XShmSegmentInfo shminfo = {0};
-	Display* display = NULL;
-	XImage* image = NULL;
+	void* context = NULL;
 	int64_t current, previous, delay;
 	struct timespec ts;
 	void* ptr[NUMBER_OF_BUFFERS];
 
 
-	display = XOpenDisplay(NULL);
-	image = XShmCreateImage(display, DefaultVisual(display, 0), DefaultDepth(display, 0), ZPixmap, NULL, &shminfo, 1920, 1080);
-	shminfo.shmid = shmget(IPC_PRIVATE, image->bytes_per_line * image->height, IPC_CREAT|0777);
-	shminfo.shmaddr = image->data = shmat(shminfo.shmid, 0, 0);
-	shminfo.readOnly = False;
-	XShmAttach(display, &shminfo);
+	context_init = xshm_init;
+	frame_copy = xshm_frame_copy;
+
+	context_init = kms_init;
+	frame_copy = kms_frame_copy;
+
+	context = context_init();
 
 	fd = open(V4L2_DEVICE_NODE, O_RDWR);
 
@@ -75,11 +81,7 @@ int main(int argc, char** argv)
 		struct timespec ts_delay = {0};
 
 		if(!delay)
-		{
-			XShmGetImage(display, RootWindow(display, 0), image, 0, 0, AllPlanes);
-			XFlush(display);
-			memcpy(ptr[i], image->data, bufs[i].length);
-		}
+			frame_copy(context, ptr[i], bufs[i].length);
 
 		clock_gettime(CLOCK_MONOTONIC, &ts);
 		current = ts.tv_sec * 1000000000 + ts.tv_nsec;
@@ -109,5 +111,8 @@ int main(int argc, char** argv)
 	}
 
 	close(fd);
+
+	context_destroy(context);
+
 	return EXIT_SUCCESS;
 }
