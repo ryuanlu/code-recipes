@@ -42,11 +42,14 @@ uint32_t get_fb(const int drm_fd)
 	return fb;
 }
 
+
 struct kms_context
 {
-	int		drm_fd;
-	VADisplay	va_display;
+	int			drm_fd;
+	VADisplay		va_display;
+	struct gbm_device	*gbm;
 };
+
 
 void write_with_vaapi(struct kms_context* context, int dma_fd, drmModeFB2Ptr fb, char* dest)
 {
@@ -103,19 +106,50 @@ void write_with_vaapi(struct kms_context* context, int dma_fd, drmModeFB2Ptr fb,
 }
 
 
+void write_with_gbm(struct kms_context* context, int dma_fd, drmModeFB2Ptr fb, char* dest)
+{
+	struct gbm_bo* bo = NULL;
+	struct gbm_import_fd_modifier_data data = {0};
+	void* ptr = NULL;
+	void* mapdata = NULL;
+
+	data.fds[0] = dma_fd;
+	data.width = fb->width;
+	data.height = fb->height;
+	data.format = fb->pixel_format;
+	data.modifier = fb->modifier;
+	data.num_fds = 1;
+	data.strides[0] = fb->pitches[0];
+	data.offsets[0] = 0;
+
+	bo = gbm_bo_import(context->gbm, GBM_BO_IMPORT_FD_MODIFIER, &data, GBM_BO_USE_RENDERING);
+	ptr = gbm_bo_map(bo, 0, 0, fb->width, fb->height, GBM_BO_TRANSFER_READ, (uint32_t*)&data.strides[0], &mapdata);
+
+	memcpy(dest, ptr, fb->pitches[0] * fb->height);
+
+	gbm_bo_unmap(bo, mapdata);
+	gbm_bo_destroy(bo);
+}
+
+
 void* kms_init(void)
 {
 	struct kms_context* context = NULL;
-	int major, minor;
 
 	context = calloc(sizeof(struct kms_context), 1);
 
 	context->drm_fd = open(DRI_DEVICE_NODE, O_RDWR | O_CLOEXEC);
 	drmSetClientCap(context->drm_fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
 
-	context->va_display = vaGetDisplayDRM(context->drm_fd);
-	vaInitialize(context->va_display, &major, &minor);
-
+#ifdef USE_VAAPI
+	{
+		int major, minor;
+		context->va_display = vaGetDisplayDRM(context->drm_fd);
+		vaInitialize(context->va_display, &major, &minor);
+	}
+#else
+	context->gbm = gbm_create_device(context->drm_fd);
+#endif
 
 	return context;
 }
@@ -131,7 +165,12 @@ void kms_frame_copy(void* context, char* dest, int size)
 	fb_id = get_fb(kms_context->drm_fd);
 	fb = drmModeGetFB2(kms_context->drm_fd, fb_id);
 	drmPrimeHandleToFD(kms_context->drm_fd, fb->handles[0], O_RDONLY, &fd);
+
+#ifdef USE_VAAPI
 	write_with_vaapi(kms_context, fd, fb, dest);
+#else
+	write_with_gbm(kms_context, fd, fb, dest);
+#endif
 	close(fd);
 
 	drmModeFreeFB2(fb);
@@ -142,7 +181,11 @@ void kms_destroy(void** context)
 {
 	struct kms_context* kms_context = (struct kms_context*)*context;
 
+#ifdef USE_VAAPI
 	vaTerminate(kms_context->va_display);
+#else
+	gbm_device_destroy(kms_context->gbm);
+#endif
 	close(kms_context->drm_fd);
 	free(kms_context);
 	*context = NULL;

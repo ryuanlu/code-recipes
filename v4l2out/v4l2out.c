@@ -30,7 +30,7 @@ int main(int argc, char** argv)
 	struct v4l2_requestbuffers reqbufs = {0};
 	struct v4l2_buffer bufs[NUMBER_OF_BUFFERS];
 	void* context = NULL;
-	int64_t current, previous, delay;
+	int64_t timestamp, delay;
 	struct timespec ts;
 	void* ptr[NUMBER_OF_BUFFERS];
 
@@ -72,42 +72,31 @@ int main(int argc, char** argv)
 
 	i = 0;
 	delay = 0;
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	previous = ts.tv_sec * 1000000000 + ts.tv_nsec;
 
 	while(1)
 	{
 		struct v4l2_buffer buf = {0};
 		struct timespec ts_delay = {0};
 
-		if(!delay)
-			frame_copy(context, ptr[i], bufs[i].length);
-
 		clock_gettime(CLOCK_MONOTONIC, &ts);
-		current = ts.tv_sec * 1000000000 + ts.tv_nsec;
+		timestamp = ts.tv_sec * 1000000000 + ts.tv_nsec;
 		bufs[i].timestamp.tv_sec = ts.tv_sec;
 		bufs[i].timestamp.tv_usec = ts.tv_nsec / 1000;
 
-		delay = 1000000000 / 60 - (current - previous) + delay;
-		previous = current;
-
-		if(delay < 0)
-		{
-			ts_delay.tv_nsec = 0;
-		}else
-		{
-			ts_delay.tv_nsec = delay;
-			delay = 0;
-		}
-
-		nanosleep(&ts_delay, NULL);
+		frame_copy(context, ptr[i], bufs[i].length);
 
 		ioctl(fd, VIDIOC_QBUF, &bufs[i]);
-
 		buf.type = reqbufs.type;
 		buf.memory = reqbufs.memory;
 		ioctl(fd, VIDIOC_DQBUF, &buf);
 		i = buf.index;
+
+		clock_gettime(CLOCK_MONOTONIC, &ts);
+		delay = 1000000000 / 60 - (ts.tv_sec * 1000000000 + ts.tv_nsec - timestamp);
+
+		ts_delay.tv_nsec = delay > 0 ? delay : 0;
+
+		nanosleep(&ts_delay, NULL);
 	}
 
 	close(fd);

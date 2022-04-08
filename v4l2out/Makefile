@@ -2,7 +2,7 @@ include ../build.mk
 
 TARGET:=v4l2out
 
-PKG_CONFIG_PACKAGES:=x11 xext libdrm libva-drm
+PKG_CONFIG_PACKAGES:=x11 xext libdrm libva-drm gbm
 
 all: $(TARGET)
 
