@@ -53,12 +53,37 @@ struct kms_context
 
 void write_with_vaapi(struct kms_context* context, int dma_fd, drmModeFB2Ptr fb, char* dest)
 {
-	VADRMPRIMESurfaceDescriptor drm_surface_desc;
 	VASurfaceAttrib va_surface_attrs[2];
 	VASurfaceID va_surface;
 	VAImage va_image;
 	VAImageFormat va_format;
 	void* ptr = NULL;
+
+#ifdef USE_TYPE_DRM_PRIME_V1
+	VASurfaceAttribExternalBuffers buffer_desc = {0};
+	unsigned long buffer_handle;
+
+	va_surface_attrs[0].value.value.i	= VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME;
+	va_surface_attrs[0].type		= VASurfaceAttribMemoryType;
+	va_surface_attrs[0].flags		= VA_SURFACE_ATTRIB_SETTABLE;
+	va_surface_attrs[0].value.type		= VAGenericValueTypeInteger;
+	va_surface_attrs[0].value.value.i	= VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME;
+	va_surface_attrs[1].type		= VASurfaceAttribExternalBufferDescriptor;
+	va_surface_attrs[1].flags		= VA_SURFACE_ATTRIB_SETTABLE;
+	va_surface_attrs[1].value.type		= VAGenericValueTypePointer;
+	va_surface_attrs[1].value.value.p	= &buffer_desc;
+
+	buffer_handle = dma_fd;
+	buffer_desc.pixel_format = VA_FOURCC_RGBA;
+	buffer_desc.width = fb->width;
+	buffer_desc.height = fb->height;
+	buffer_desc.num_buffers = 1;
+	buffer_desc.buffers = &buffer_handle;
+	buffer_desc.num_planes =1 ;
+	buffer_desc.pitches[0] = fb->pitches[0];
+	buffer_desc.offsets[0] = 0;
+#else
+	VADRMPRIMESurfaceDescriptor drm_surface_desc;
 
 	va_surface_attrs[0].type		= VASurfaceAttribMemoryType;
 	va_surface_attrs[0].flags		= VA_SURFACE_ATTRIB_SETTABLE;
@@ -84,6 +109,7 @@ void write_with_vaapi(struct kms_context* context, int dma_fd, drmModeFB2Ptr fb,
 	drm_surface_desc.layers[0].pitch[0] = fb->pitches[0];
 	drm_surface_desc.layers[0].offset[0] = 0;
 	drm_surface_desc.layers[0].object_index[0] = 0;
+#endif
 
 	vaCreateSurfaces(context->va_display, VA_RT_FORMAT_RGB32, fb->width, fb->height, &va_surface, 1, va_surface_attrs, 2);
 
