@@ -116,6 +116,14 @@ static void xdg_toplevel_close(void* data, struct xdg_toplevel* toplevel)
 {
 }
 
+static void xdg_toplevel_configure_bounds(void *data, struct xdg_toplevel *xdg_toplevel, int32_t width, int32_t height)
+{
+}
+
+static void xdg_toplevel_wm_capabilities(void *data, struct xdg_toplevel *xdg_toplevel, struct wl_array *capabilities)
+{
+}
+
 void wl_pointer_enter(void *data, struct wl_pointer *wl_pointer, uint32_t serial, struct wl_surface *surface, wl_fixed_t surface_x, wl_fixed_t surface_y)
 {
 	struct W_context* WL = (struct W_context*)data;
@@ -234,6 +242,8 @@ int main(int argc, char const *argv[])
 	{
 		.configure = xdg_toplevel_configure,
 		.close = xdg_toplevel_close,
+		.configure_bounds = xdg_toplevel_configure_bounds,
+		.wm_capabilities = xdg_toplevel_wm_capabilities,
 	};
 
 	const struct wl_pointer_listener pointer_listener =
