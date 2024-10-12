@@ -1,5 +1,8 @@
-*.o
-*.d
+.cache
 *.bin
-*.vert.c
+*.d
+*.debug
 *.frag.c
+*.o
+*.vert.c
+compile_commands.json
