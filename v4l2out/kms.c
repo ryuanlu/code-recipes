@@ -14,6 +14,7 @@
 #include <va/va_drmcommon.h>
 
 #define DRI_DEVICE_NODE "/dev/dri/card0"
+#define DRI_RENDER_NODE	"/dev/dri/renderD128"
 
 uint32_t get_fb(const int drm_fd)
 {
@@ -46,6 +47,7 @@ uint32_t get_fb(const int drm_fd)
 struct kms_context
 {
 	int			drm_fd;
+	int			render_fd;
 	VADisplay		va_display;
 	struct gbm_device	*gbm;
 };
@@ -170,7 +172,8 @@ void* kms_init(void)
 #ifdef USE_VAAPI
 	{
 		int major, minor;
-		context->va_display = vaGetDisplayDRM(context->drm_fd);
+		context->render_fd = open(DRI_RENDER_NODE, O_RDWR | O_CLOEXEC);
+		context->va_display = vaGetDisplayDRM(context->render_fd);
 		vaInitialize(context->va_display, &major, &minor);
 	}
 #else
@@ -209,6 +212,7 @@ void kms_destroy(void** context)
 
 #ifdef USE_VAAPI
 	vaTerminate(kms_context->va_display);
+	close(kms_context->render_fd);
 #else
 	gbm_device_destroy(kms_context->gbm);
 #endif
