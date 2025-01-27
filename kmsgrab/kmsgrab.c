@@ -11,22 +11,22 @@
 #define INTEL_XTILE_WIDTH	(512)
 #define INTEL_XTILE_HEIGHT	(8)
 
-drmModeFBPtr get_fb(const int drm_fd)
+drmModeFB2Ptr get_fb(const int drm_fd)
 {
 	int i;
 	drmModeResPtr res;
 	drmModeCrtcPtr crtc;
-	drmModeFBPtr fb;
+	drmModeFB2Ptr fb;
 
 	drmSetClientCap(drm_fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
 	res = drmModeGetResources(drm_fd);
 
-	for(i = 0;i < res->count_crtcs;--i)
+	for(i = 0;i < res->count_crtcs;++i)
 	{
 		crtc = drmModeGetCrtc(drm_fd, res->crtcs[i]);
 		if(!crtc || !crtc->buffer_id)
 			continue;
-		fb = drmModeGetFB(drm_fd, crtc->buffer_id);
+		fb = drmModeGetFB2(drm_fd, crtc->buffer_id);
 		drmModeFreeCrtc(crtc);
 		if(fb)
 			break;
@@ -56,7 +56,7 @@ void tiled_to_linear(char *input, char *output, int image_width, int image_heigh
 
 int main(int argc, char const *argv[])
 {
-	drmModeFBPtr fb = NULL;
+	drmModeFB2Ptr fb = NULL;
 	int drm_fd = 0;
 	int fb_dmafd = 0;
 	char* ptr = NULL;
@@ -68,31 +68,31 @@ int main(int argc, char const *argv[])
 	fb = get_fb(drm_fd);
 
 
-	drmPrimeHandleToFD(drm_fd, fb->handle, O_RDONLY, &fb_dmafd);
-	ptr = mmap(NULL, fb->pitch * fb->height, PROT_READ, MAP_SHARED, fb_dmafd, 0);
+	drmPrimeHandleToFD(drm_fd, fb->handles[0], O_RDONLY, &fb_dmafd);
+	ptr = mmap(NULL, fb->pitches[0] * fb->height, PROT_READ, MAP_PRIVATE, fb_dmafd, 0);
 	fprintf(stderr, "mmap dmabuf fd %d: %p\n", fb_dmafd, ptr);
-	image = calloc(fb->pitch * fb->height, 1);
-	tiled_to_linear(ptr, image, fb->pitch, fb->height, INTEL_XTILE_WIDTH, INTEL_XTILE_HEIGHT);
+	image = calloc(fb->pitches[0] * fb->height, 1);
+	tiled_to_linear(ptr, image, fb->pitches[0], fb->height, INTEL_XTILE_WIDTH, INTEL_XTILE_HEIGHT);
 	fp = fopen("output_dmabuf.bin", "w");
-	fwrite(image, fb->pitch * fb->height, 1, fp);
+	fwrite(image, fb->pitches[0] * fb->height, 1, fp);
 	fclose(fp);
-	munmap(ptr, fb->pitch * fb->height);
+	munmap(ptr, fb->pitches[0] * fb->height);
 	free(image);
 	close(fb_dmafd);
 
 
 	memset(&mreq, 0, sizeof(mreq));
-	mreq.handle = fb->handle;
+	mreq.handle = fb->handles[0];
 	drmIoctl(drm_fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq);
-	ptr = mmap(NULL, fb->pitch * fb->height, PROT_READ, MAP_SHARED, drm_fd, mreq.offset);
+	ptr = mmap(NULL, fb->pitches[0] * fb->height, PROT_READ, MAP_SHARED, drm_fd, mreq.offset);
 	fprintf(stderr, "mmap fd %d: %p\n", drm_fd, ptr);
 	fp = fopen("output.bin", "w");
-	fwrite(ptr, fb->pitch * fb->height, 1, fp);
-	munmap(ptr, fb->pitch * fb->height);
+	fwrite(ptr, fb->pitches[0] * fb->height, 1, fp);
+	munmap(ptr, fb->pitches[0] * fb->height);
 	fclose(fp);
 
 
-	drmModeFreeFB(fb);
+	drmModeFreeFB2(fb);
 	close(drm_fd);
 
 	return EXIT_SUCCESS;
